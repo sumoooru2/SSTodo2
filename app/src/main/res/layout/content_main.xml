@@ -12,16 +12,11 @@
     tools:context="jp.ac.titech.itpro.sdl.sumoooru2.sstodo2.MainActivity"
     tools:showIn="@layout/activity_main">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!" />
     <ListView
         android:id="@+id/todo_list"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/activity_vertical_margin"
-        android:layout_marginTop="@dimen/activity_vertical_margin" />
+ />
 
     <!--android:layout_above="@id/input_text"-->
     <!--android:layout_below="@id/connection_progress"-->

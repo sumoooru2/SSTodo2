@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -17,11 +18,14 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -29,6 +33,7 @@ import java.io.OutputStreamWriter;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.UUID;
@@ -38,17 +43,33 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_BT1 = 1;
     private final static UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
-    private ListView todoListView;
     private ArrayList<Note> todoList;
     private ArrayAdapter<Note> todoAdapter;
     private BTSocket btSocket;
 
     private class Note {
         public String tag, date;
+        private boolean expanded = false, editing = false;
+        public boolean reDraw = true, visible = true, isTag = false;
+        public int height = 5;
         public ArrayList<String> texts = new ArrayList<>();
 
+        public void toggle() {
+            expanded = !expanded;
+            reDraw = true;
+        }
+
+        public void setEditing(boolean editState) {
+            editing = editState;
+            reDraw = true;
+        }
+
+        public boolean isEditing() {
+            return editing;
+        }
+
         public String makeText() {
-            return makeText(-1);
+            return makeText(editing || expanded ? -1 : height);
         }
 
         public String makeText(int lines) {
@@ -66,6 +87,25 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             return ret;
+        }
+
+        public void changeTexts(String text) {
+            texts = new ArrayList<>(Arrays.asList(text.split("\n")));
+        }
+
+        public void changeLimit(String limit) {
+            date = limit;
+        }
+
+        public String setFlags(String prevTag) {
+            if (tag.equals("__end") || tag.equals("__begin")) {
+                visible = false;
+            } else if (!prevTag.equals(tag)) {
+                isTag = true;
+            } else if (texts.get(0).equals("")) {
+                visible = false;
+            }
+            return tag;
         }
     }
 
@@ -85,30 +125,86 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        });
 
-        todoListView = (ListView) findViewById(R.id.todo_list);
+        ListView todoListView = (ListView) findViewById(R.id.todo_list);
         todoList = new ArrayList<>();
         todoAdapter = new ArrayAdapter<Note>(this, 0, todoList) {
             @Override
             public View getView(int pos, View view, ViewGroup parent) {
-                Note note = getItem(pos);
-                if (note.texts == null) {
+                final Note note = getItem(pos);
+                if(!note.visible){
+                    LayoutInflater inflater = LayoutInflater.from(getContext());
+                    view = inflater.inflate(R.layout.todo_empty, parent, false);
+                    return view;
+                }
+                if (note.isTag) {
                     LayoutInflater inflater = LayoutInflater.from(getContext());
 //                    view = inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
                     view = inflater.inflate(android.R.layout.test_list_item, parent, false);
+                    view.setBackgroundColor(Color.LTGRAY);
                     TextView tv1 = (TextView) view.findViewById(android.R.id.text1);
+                    tv1.setTextColor(Color.DKGRAY);
                     tv1.setText(note.tag);
 //                    tv1.setText(note.tag.substring(1, note.tag.length()-1));
+//                    view.setVisibility(View.GONE);
                     return view;
                 }
 
                 SimpleDateFormat sdf = new SimpleDateFormat("MM/dd");
                 LayoutInflater inflater = LayoutInflater.from(getContext());
-                view = inflater.inflate(R.layout.todo_elem, parent, false);
+                if (note.isEditing()) {
+                    view = inflater.inflate(R.layout.todo_elem2_edit, parent, false);
+                    Button ok = (Button) view.findViewById(R.id.edit_ok);
+                    final View finalView = view;
+                    ok.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            EditText et = (EditText) finalView.findViewById(R.id.texts);
+                            String texts = et.getText().toString();
+                            note.changeTexts(texts);
+                            et = (EditText) finalView.findViewById(R.id.limit);
+                            String limit = et.getText().toString();
+                            note.changeLimit(limit);
+                            save(todoList);
+                            note.setEditing(false);
+                            todoAdapter.notifyDataSetChanged();
+                        }
+                    });
+                    Button cancel = (Button) view.findViewById(R.id.edit_cancel);
+                    cancel.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            note.setEditing(false);
+                            todoAdapter.notifyDataSetChanged();
+                        }
+                    });
+
+                } else {
+                    view = inflater.inflate(R.layout.todo_elem2, parent, false);
+                    view.setOnLongClickListener(new View.OnLongClickListener() {
+                        @Override
+                        public boolean onLongClick(View v) {
+                            Toast.makeText(MainActivity.this, "long click", Toast.LENGTH_SHORT).show();
+                            note.setEditing(true);
+                            todoAdapter.notifyDataSetChanged();
+                            return false;
+                        }
+                    });
+                    view.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            TextView texts = (TextView) v.findViewById(R.id.texts);
+                            note.toggle();
+                            texts.setText(note.makeText());
+                        }
+                    });
+                }
+
+//                Button button = (Button) view.findViewById(R.id.edit_button);
                 TextView texts = (TextView) view.findViewById(R.id.texts);
-                texts.setText(note.makeText(5));
+                texts.setText(note.makeText());
                 try {
                     Date dt = sdf.parse(note.date);
-                    TextView date = (TextView) view.findViewById(R.id.date);
+                    TextView date = (TextView) view.findViewById(R.id.limit);
                     date.setText(note.date);
                     Calendar cal = Calendar.getInstance();
                     cal.setTime(dt);
@@ -122,6 +218,7 @@ public class MainActivity extends AppCompatActivity {
                         e.printStackTrace();
                     }
                 }
+
                 return view;
             }
         };
@@ -136,72 +233,52 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onPause(){
+    public void onPause() {
         super.onPause();
         if (btSocket != null && btSocket.isConnected()) {
             btSocket.close();
         }
     }
 
-    private void makeTodoList(){
+    private void makeTodoList() {
         try {
-            FileInputStream in = openFileInput(".lastsync");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-            String str = "";
-            String tmp;
-            while ((tmp = reader.readLine()) != null) {
-                str = str + tmp + "\n";
-            }
-            reader.close();
-            Log.d("test", str);
 
             String prevTag = "";
 
-            JsonReader reader2 = new JsonReader(new InputStreamReader(openFileInput(".lastsync"), "UTF-8"));
-            reader2.beginObject();
-            if (!reader2.nextName().equals("list")){
+            JsonReader reader = new JsonReader(new InputStreamReader(openFileInput(".lastsync"), "UTF-8"));
+            reader.beginObject();
+            if (!reader.nextName().equals("list")) {
                 throw new IOException("not list");
             }
-            reader2.beginArray();
-            while(reader2.hasNext()) {
-                Note note = new Note();
-                reader2.beginObject();
-                while(reader2.hasNext()) {
-                    switch (reader2.nextName()) {
-                        case "date":
-                            note.date = reader2.nextString();
-                            break;
-                        case "texts":
-                            reader2.beginArray();
-                            while (reader2.hasNext()) {
-                                note.texts.add(reader2.nextString());
-                            }
-                            reader2.endArray();
-                            break;
-                        case "tag":
-                            note.tag = reader2.nextString();
-                            break;
-                    }
-                }
-                reader2.endObject();
-                if (!prevTag.equals(note.tag)) {
-                    prevTag = note.tag;
-                    Note tag = new Note();
-                    tag.tag = note.tag;
-                    tag.texts = null;
-                    todoAdapter.add(tag);
-                }
+            reader.beginArray();
+            while (reader.hasNext()) {
+                Note note = noteFromJson(reader);
+                Log.d("make", note.tag);
 
+                prevTag = note.setFlags(prevTag);
                 todoAdapter.add(note);
 
+//                if (note.tag.equals("__end")) {
+//                    break;
+//                }
+//                if (!prevTag.equals(note.tag) && !note.tag.equals("__begin")) {
+//                    prevTag = note.tag;
+//                    Note tag = new Note();
+//                    tag.tag = note.tag;
+//                    tag.texts = null;
+//                    todoAdapter.add(tag);
+//                }
+//                if (!note.texts.isEmpty() && !(note.texts.size() == 1 && note.texts.get(0).equals(""))) {
+//                    todoAdapter.add(note);
+//                }
             }
             todoAdapter.notifyDataSetChanged();
-            reader2.endArray();
-            reader2.endObject();
-            reader2.close();
+            reader.endArray();
+            reader.endObject();
+            reader.close();
         } catch (IOException e) {
             e.printStackTrace();
-        }catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -226,7 +303,7 @@ public class MainActivity extends AppCompatActivity {
                             BluetoothSocket socket = null;
                             try {
                                 socket = params[0].createRfcommSocketToServiceRecord(SPP_UUID);
-                                if(!socket.isConnected()){
+                                if (!socket.isConnected()) {
                                     socket.connect();
                                 }
                             } catch (IOException e) {
@@ -252,7 +329,6 @@ public class MainActivity extends AppCompatActivity {
                             Toast.makeText(MainActivity.this, "success to connect", Toast.LENGTH_SHORT).show();
 
                             btSocket = new BTSocket(socket);
-                            btSocket.init();
 //                            btSocket.start();
                             Log.d("test", "start socket");
                         }
@@ -279,80 +355,127 @@ public class MainActivity extends AppCompatActivity {
 
         //noinspection SimplifiableIfStatement
         switch (id) {
-            case R.id.action_settings:
-                todoAdapter.add(new Note());
-                todoAdapter.notifyDataSetChanged();
-                todoListView.smoothScrollByOffset(todoAdapter.getCount());
-                return true;
+//            case R.id.action_settings:
+//                todoAdapter.add(new Note());
+//                todoAdapter.notifyDataSetChanged();
+//                todoListView.smoothScrollByOffset(todoAdapter.getCount());
+//                return true;
             case R.id.action_settings2:
                 //startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), 123);
                 if (btSocket != null && btSocket.isConnected()) {
                     Toast.makeText(MainActivity.this, "socket is already valid", Toast.LENGTH_SHORT).show();
                     break;
                 }
-                if(btSocket != null){
+                if (btSocket != null) {
                     Log.d("btsock", "" + btSocket.isConnected());
                 }
                 startActivityForResult(new Intent(this, BTActivity.class), REQ_BT1);
                 return true;
-            case R.id.action_settings3:
-                btSocket.send();
-                break;
+//            case R.id.action_settings3:
+//                btSocket.send();
+//                break;
             case R.id.action_settings4:
-                if(btSocket != null && btSocket.isConnected()){
+                if (btSocket != null && btSocket.isConnected()) {
                     btSocket.pull();
-                }else{
+                } else {
                     Toast.makeText(MainActivity.this, "socket is not valid", Toast.LENGTH_SHORT).show();
                 }
                 break;
             case R.id.action_settings5:
                 deleteFile(".lastsync");
                 break;
+            case R.id.action_settings6:
+                btSocket.sync();
+                break;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
-    private class BTSocket{
+    public void save(ArrayList<Note> notes) {
+        try {
+            //TODO
+            deleteFile(".lastsync");
+            JsonWriter writer = new JsonWriter(new OutputStreamWriter(openFileOutput(".lastsync", MODE_PRIVATE), "UTF-8"));
+            writer.beginObject();
+            writer.name("list");
+            writer.beginArray();
+            for (Note n : notes) {
+                if (n.texts == null) {
+                    continue;
+                }
+//                        Log.d("test", n.makeText(2));
+                writer.beginObject();
+                writer.name("date").value(n.date);
+                writer.name("texts");
+                writer.beginArray();
+                for (String s : n.texts) {
+                    writer.value(s);
+                }
+                writer.endArray();
+                writer.name("tag").value(n.tag);
+                writer.endObject();
+            }
+
+            writer.endArray();
+            writer.endObject();
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public Note noteFromJson(JsonReader reader) throws IOException {
+        Note note = new Note();
+        reader.beginObject();
+        while (reader.hasNext()) {
+            switch (reader.nextName()) {
+                case "tag":
+                    note.tag = reader.nextString();
+                    break;
+                case "date":
+                    note.date = reader.nextString();
+                    break;
+                case "texts":
+                    reader.beginArray();
+                    while (reader.hasNext()) {
+                        note.texts.add(reader.nextString());
+                    }
+                    reader.endArray();
+                    break;
+                default:
+                    Log.d("reader", "???");
+                    break;
+            }
+
+        }
+        reader.endObject();
+        return note;
+    }
+
+    private class BTSocket {
         private JsonReader reader;
         private JsonWriter writer;
+        private BufferedWriter bw;
+        private OutputStreamWriter osw;
         private BluetoothSocket socket;
 
         public BTSocket(BluetoothSocket socket) {
             this.socket = socket;
             try {
                 reader = new JsonReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-                writer = new JsonWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
+                writer = new JsonWriter(osw = new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
+                bw = new BufferedWriter(osw);
                 reader.setLenient(true);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        public boolean isConnected(){
-            return socket.isConnected();
-        }
-
-        public void init(){
-            try {
                 writer.beginArray();
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-        public void send() {
-            try {
-                writer.beginObject();
-                writer.name("seq").value(1);
-                writer.name("time").value("12:34");
-                writer.name("content").value("hello");
-                writer.name("sender").value("me");
-                writer.endObject();
-                writer.flush();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        public boolean isConnected() {
+            return socket.isConnected();
         }
 
         public void pull() {
@@ -365,85 +488,45 @@ public class MainActivity extends AppCompatActivity {
                 writer.flush();
                 ArrayList<Note> recvNotes = new ArrayList<>();
 
-                boolean last = true;
-                while (last && reader.hasNext()) {
-                    Note note = new Note();
-                    boolean ok = true;
-                    reader.beginObject();
-                    while (reader.hasNext()) {
-                        String name = reader.nextName();
-                        switch (name) {
-                            case "texts":
-                                reader.beginArray();
-                                while (reader.hasNext()) {
-                                    while (reader.hasNext()) {
-                                        String val = reader.nextString();
-                                        note.texts.add(val);
-                                    }
-                                }
-                                reader.endArray();
-                                break;
-                            case "date": {
-                                note.date = reader.nextString();
-                                break;
-                            }
-                            case "tag": {
-                                switch (note.tag = reader.nextString()) {
-                                    case "__end":
-                                        last = false;
-                                    case "__begin":
-                                        ok = false;
-                                        break;
-                                }
-                                break;
-                            }
-                            default:
-                                Log.d("reader", "??? " + name);
-                                break;
-                        }
-
-                    }
-                    reader.endObject();
-                    if (ok && (!note.texts.get(0).equals("") && !note.texts.isEmpty())) {
-                        recvNotes.add(note);
+                reader.beginObject();
+                if (!reader.nextName().equals("list")) {
+                    throw new IOException("not list");
+                }
+                reader.beginArray();
+                while (reader.hasNext()) {
+                    Note note = noteFromJson(reader);
+                    Log.d("pull", note.tag);
+                    recvNotes.add(note);
+                    if (note.tag.equals("__end")) {
+                        break;
                     }
                 }
-                try {
-                    //TODO
-                    deleteFile(".lastsync");
-                    JsonWriter writer2 = new JsonWriter(new OutputStreamWriter(openFileOutput(".lastsync", MODE_PRIVATE), "UTF-8"));
-                    writer2.beginObject();
-                    writer2.name("list");
-                    writer2.beginArray();
-                    for (Note n : recvNotes) {
-                        Log.d("test", n.makeText(2));
-                        writer2.beginObject();
-                        writer2.name("date").value(n.date);
-                        writer2.name("texts");
-                        writer2.beginArray();
-                        for(String s : n.texts){
-                            writer2.value(s);
-                        }
-                        writer2.endArray();
-                        writer2.name("tag").value(n.tag);
-                        writer2.endObject();
-//                        String str = "保存する文字列";
-//                        FileOutputStream out = openFileOutput( "test.txt", MODE_PRIVATE );
-//                        out.write( str.getBytes()   );
-
-                    }
-
-                    writer2.endArray();
-                    writer2.endObject();
-                    writer2.flush();
-                    writer2.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                reader.endArray();
+                reader.endObject();
+                Log.d("pull num ", "" + recvNotes.size());
+                save(recvNotes);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             makeTodoList();
+        }
+
+        public void sync() {
+            try {
+                writer.beginObject();
+                writer.name("type").value("sync");
+                writer.endObject();
+                writer.flush();
+
+                BufferedReader breader = new BufferedReader(new InputStreamReader(openFileInput(".lastsync"), "UTF-8"));
+                String data = breader.readLine();
+                breader.close();
+                bw.write(data);
+                bw.flush();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         public void close() {

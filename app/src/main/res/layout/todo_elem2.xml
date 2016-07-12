@@ -2,32 +2,28 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent">
 
-    <Button
-        android:id="@+id/edit_button"
+
+    <TextView
+        android:id="@+id/limit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingLeft="@dimen/activity_vertical_margin"
-        android:layout_alignParentLeft="true"
-        android:text="Edit"/>
-
+        android:layout_alignParentRight="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginRight="@dimen/activity_vertical_margin"/>
     <TextView
         android:id="@+id/left_days"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentRight="true"
-        android:layout_marginRight="@dimen/activity_vertical_margin"/>
-    <TextView
-        android:id="@+id/limit"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_toLeftOf="@id/left_days"
+        android:layout_below="@id/limit"
         android:layout_marginRight="@dimen/activity_vertical_margin"/>
     <TextView
         android:id="@+id/texts"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_toRightOf="@id/edit_button"
+        android:layout_alignParentLeft="true"
         android:layout_toLeftOf="@id/limit"
         android:layout_marginLeft="@dimen/activity_vertical_margin"/>
+    <!--android:layout_toRightOf="@id/edit_button"-->
 
 </RelativeLayout>

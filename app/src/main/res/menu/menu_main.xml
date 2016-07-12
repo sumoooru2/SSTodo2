@@ -3,28 +3,23 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="jp.ac.titech.itpro.sdl.sumoooru2.sstodo2.MainActivity">
     <item
-        android:id="@+id/action_settings"
-        android:orderInCategory="100"
-        android:title="@string/action_settings"
-        app:showAsAction="never" />
-    <item
         android:id="@+id/action_settings2"
-        android:orderInCategory="100"
-        android:title="@string/action_settings2"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/action_settings3"
-        android:orderInCategory="100"
-        android:title="Send"
+        android:orderInCategory="1"
+        android:title="Connect"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings4"
-        android:orderInCategory="100"
+        android:orderInCategory="2"
         android:title="Pull"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings5"
-        android:orderInCategory="100"
+        android:orderInCategory="3"
         android:title="Delete"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_settings6"
+        android:orderInCategory="4"
+        android:title="Sync"
         app:showAsAction="never" />
 </menu>
