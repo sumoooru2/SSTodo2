@@ -26,7 +26,6 @@ import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -46,68 +45,6 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<Note> todoList;
     private ArrayAdapter<Note> todoAdapter;
     private BTSocket btSocket;
-
-    private class Note {
-        public String tag, date;
-        private boolean expanded = false, editing = false;
-        public boolean reDraw = true, visible = true, isTag = false;
-        public int height = 5;
-        public ArrayList<String> texts = new ArrayList<>();
-
-        public void toggle() {
-            expanded = !expanded;
-            reDraw = true;
-        }
-
-        public void setEditing(boolean editState) {
-            editing = editState;
-            reDraw = true;
-        }
-
-        public boolean isEditing() {
-            return editing;
-        }
-
-        public String makeText() {
-            return makeText(editing || expanded ? -1 : height);
-        }
-
-        public String makeText(int lines) {
-            if (texts == null) {
-                return "";
-            }
-            String ret = "";
-            int cnt = 0;
-            for (String t : texts) {
-                ret += t + '\n';
-                cnt++;
-                if (cnt == lines) {
-                    ret += ".....";
-                    break;
-                }
-            }
-            return ret;
-        }
-
-        public void changeTexts(String text) {
-            texts = new ArrayList<>(Arrays.asList(text.split("\n")));
-        }
-
-        public void changeLimit(String limit) {
-            date = limit;
-        }
-
-        public String setFlags(String prevTag) {
-            if (tag.equals("__end") || tag.equals("__begin")) {
-                visible = false;
-            } else if (!prevTag.equals(tag)) {
-                isTag = true;
-            } else if (texts.get(0).equals("")) {
-                visible = false;
-            }
-            return tag;
-        }
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -253,24 +190,11 @@ public class MainActivity extends AppCompatActivity {
             reader.beginArray();
             while (reader.hasNext()) {
                 Note note = noteFromJson(reader);
-                Log.d("make", note.tag);
+//                Log.d("make", note.tag);
 
                 prevTag = note.setFlags(prevTag);
                 todoAdapter.add(note);
 
-//                if (note.tag.equals("__end")) {
-//                    break;
-//                }
-//                if (!prevTag.equals(note.tag) && !note.tag.equals("__begin")) {
-//                    prevTag = note.tag;
-//                    Note tag = new Note();
-//                    tag.tag = note.tag;
-//                    tag.texts = null;
-//                    todoAdapter.add(tag);
-//                }
-//                if (!note.texts.isEmpty() && !(note.texts.size() == 1 && note.texts.get(0).equals(""))) {
-//                    todoAdapter.add(note);
-//                }
             }
             todoAdapter.notifyDataSetChanged();
             reader.endArray();
@@ -385,7 +309,11 @@ public class MainActivity extends AppCompatActivity {
                 deleteFile(".lastsync");
                 break;
             case R.id.action_settings6:
-                btSocket.sync();
+                if (btSocket != null && btSocket.isConnected()) {
+                    btSocket.sync();
+                } else {
+                    Toast.makeText(MainActivity.this, "socket is not valid", Toast.LENGTH_SHORT).show();
+                }
                 break;
         }
 
@@ -400,21 +328,9 @@ public class MainActivity extends AppCompatActivity {
             writer.beginObject();
             writer.name("list");
             writer.beginArray();
+
             for (Note n : notes) {
-                if (n.texts == null) {
-                    continue;
-                }
-//                        Log.d("test", n.makeText(2));
-                writer.beginObject();
-                writer.name("date").value(n.date);
-                writer.name("texts");
-                writer.beginArray();
-                for (String s : n.texts) {
-                    writer.value(s);
-                }
-                writer.endArray();
-                writer.name("tag").value(n.tag);
-                writer.endObject();
+                n.write(writer);
             }
 
             writer.endArray();
@@ -430,25 +346,7 @@ public class MainActivity extends AppCompatActivity {
         Note note = new Note();
         reader.beginObject();
         while (reader.hasNext()) {
-            switch (reader.nextName()) {
-                case "tag":
-                    note.tag = reader.nextString();
-                    break;
-                case "date":
-                    note.date = reader.nextString();
-                    break;
-                case "texts":
-                    reader.beginArray();
-                    while (reader.hasNext()) {
-                        note.texts.add(reader.nextString());
-                    }
-                    reader.endArray();
-                    break;
-                default:
-                    Log.d("reader", "???");
-                    break;
-            }
-
+            note.read(reader);
         }
         reader.endObject();
         return note;
@@ -495,7 +393,7 @@ public class MainActivity extends AppCompatActivity {
                 reader.beginArray();
                 while (reader.hasNext()) {
                     Note note = noteFromJson(reader);
-                    Log.d("pull", note.tag);
+//                    Log.d("pull", note.tag);
                     recvNotes.add(note);
                     if (note.tag.equals("__end")) {
                         break;
@@ -523,6 +421,17 @@ public class MainActivity extends AppCompatActivity {
                 breader.close();
                 bw.write(data);
                 bw.flush();
+
+                reader.beginObject();
+                String name = reader.nextName();//result_sync
+                Log.d("sync", name);
+                String result = reader.nextString();
+                Log.d("sync", result);
+                reader.endObject();
+                if(result.equals("ok")){
+                    pull();
+                }
+
 
             } catch (IOException e) {
                 e.printStackTrace();
