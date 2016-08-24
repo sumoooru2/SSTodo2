@@ -1,12 +1,15 @@
 package jp.ac.titech.itpro.sdl.sumoooru2.sstodo2;
 
 import android.app.Activity;
+import android.app.ProgressDialog;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.JsonReader;
@@ -39,7 +42,7 @@ import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int REQ_BT1 = 1;
+    private static final int REQ_BT1 = 1, REQ_SYNC = 2, REQ_MAKETODOLIST = 3, REQ_STOPSPIN = 4;
     private final static UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     private ArrayList<Note> todoList;
@@ -68,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public View getView(int pos, View view, ViewGroup parent) {
                 final Note note = getItem(pos);
-                if(!note.visible){
+                if (!note.visible) {
                     LayoutInflater inflater = LayoutInflater.from(getContext());
                     view = inflater.inflate(R.layout.todo_empty, parent, false);
                     return view;
@@ -146,10 +149,26 @@ public class MainActivity extends AppCompatActivity {
                     Calendar cal = Calendar.getInstance();
                     cal.setTime(dt);
                     cal.set(Calendar.YEAR, Calendar.getInstance().get(Calendar.YEAR));
-                    long diffDay = (cal.getTimeInMillis() - Calendar.getInstance().getTimeInMillis()) / (1000 * 60 * 60 * 24);
+                    cal.set(Calendar.HOUR, 23);
+                    cal.set(Calendar.MINUTE, 59);
+                    long diffMilli = (cal.getTimeInMillis() - Calendar.getInstance().getTimeInMillis());
+                    long diffDay = diffMilli / (1000 * 60 * 60 * 24);
 //                    left.setText(sdf.format(dt));
                     TextView left = (TextView) view.findViewById(R.id.left_days);
-                    left.setText(diffDay + " days");
+                    if (diffMilli < 0) {
+                        left.setTextColor(Color.RED);
+                        left.setText("Over");
+                    } else if (diffDay == 0) {
+//                        long diffHour = diffMilli / (1000 * 60 * 60);
+//                        left.setText(diffHour + " hours");
+                        left.setTextColor(Color.MAGENTA);
+                        left.setText("Today");
+                    } else {
+                        if (diffDay == 1) {
+                            left.setTextColor(Color.GREEN);
+                        }
+                        left.setText(diffDay + " days");
+                    }
                 } catch (ParseException e) {
                     if (!note.date.equals("before")) {
                         e.printStackTrace();
@@ -167,6 +186,10 @@ public class MainActivity extends AppCompatActivity {
     public void onResume() {
         super.onResume();
         makeTodoList();
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        progressDialog.setMessage("processing...");
+        progressDialog.setCancelable(true);
     }
 
     @Override
@@ -270,6 +293,27 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
+    private ProgressDialog progressDialog;
+    private Handler commHandler = new Handler(new Handler.Callback() {
+        @Override
+        public boolean handleMessage(Message msg) {
+            switch (msg.what) {
+//                case REQ_SYNC:
+//                    btSocket.sync();
+//                    progressDialog.dismiss();
+//                    break;
+                case REQ_MAKETODOLIST:
+                    makeTodoList();
+                    progressDialog.dismiss();
+                    break;
+                case REQ_STOPSPIN:
+                    progressDialog.dismiss();
+                    break;
+            }
+            return false;
+        }
+    });
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
@@ -300,7 +344,14 @@ public class MainActivity extends AppCompatActivity {
 //                break;
             case R.id.action_settings4:
                 if (btSocket != null && btSocket.isConnected()) {
-                    btSocket.pull();
+                    progressDialog.setMessage("pulling...");
+                    progressDialog.show();
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            btSocket.pull();
+                        }
+                    }.start();
                 } else {
                     Toast.makeText(MainActivity.this, "socket is not valid", Toast.LENGTH_SHORT).show();
                 }
@@ -310,10 +361,26 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case R.id.action_settings6:
                 if (btSocket != null && btSocket.isConnected()) {
-                    btSocket.sync();
+                    progressDialog.setMessage("synchronizing...");
+                    progressDialog.show();
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            btSocket.sync();
+                        }
+                    }.start();
+//                    btSocket.sync();
                 } else {
                     Toast.makeText(MainActivity.this, "socket is not valid", Toast.LENGTH_SHORT).show();
                 }
+                break;
+            case R.id.action_settings7:
+//                ProgressDialog progressDialog = new ProgressDialog(this);
+//                progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+//                progressDialog.setMessage("processing...");
+//                progressDialog.setCancelable(true);
+//                progressDialog.show();
+//                progressDialog.dismiss();
                 break;
         }
 
@@ -378,7 +445,8 @@ public class MainActivity extends AppCompatActivity {
 
         public void pull() {
             todoList.clear();
-            todoAdapter.notifyDataSetChanged();
+//?            todoAdapter.notifyDataSetChanged();
+//            commHandler.sendMessage(commHandler.obtainMessage(123));
             try {
                 writer.beginObject();
                 writer.name("type").value("pull");
@@ -406,7 +474,8 @@ public class MainActivity extends AppCompatActivity {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            makeTodoList();
+            commHandler.sendMessage(commHandler.obtainMessage(REQ_MAKETODOLIST));
+//            makeTodoList();
         }
 
         public void sync() {
@@ -428,8 +497,10 @@ public class MainActivity extends AppCompatActivity {
                 String result = reader.nextString();
                 Log.d("sync", result);
                 reader.endObject();
-                if(result.equals("ok")){
+                if (result.equals("ok")) {
                     pull();
+                }else{
+                    commHandler.sendMessage(commHandler.obtainMessage(REQ_STOPSPIN));
                 }
 
 

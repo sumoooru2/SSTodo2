@@ -22,4 +22,9 @@
         android:orderInCategory="4"
         android:title="Sync"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_settings7"
+        android:orderInCategory="5"
+        android:title="Test"
+        app:showAsAction="never" />
 </menu>

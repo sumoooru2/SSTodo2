@@ -40,7 +40,11 @@ class Note {
         String ret = "";
         int cnt = 0;
         for (String t : texts) {
-            ret += t + '\n';
+            if(cnt == 0 && t.startsWith(date)){
+                ret += t.substring(Math.min(date.length() + 1, t.length()));
+            }else{
+                ret += t + '\n';
+            }
             cnt++;
             if (cnt == lines) {
                 ret += ".....";
